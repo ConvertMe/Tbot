@@ -1,6 +1,6 @@
 import express from 'express'
 import dotenv from "dotenv"
-import { TelegramBot } from './modules/telegram/telegram.service'
+import { TelegramBot } from './modules/telegram/telegram'
 dotenv.config()
 
 const app = express()

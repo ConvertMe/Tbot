@@ -12,7 +12,7 @@ let config: {
     port: 3306,
     user: process.env.MYSQL_LOGIN as string,
     password: process.env.MYSQL_PASSWORD as string,
-    database: 'photobot',
+    database: 'tbot',
 }
 
 export default config 
