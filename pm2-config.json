@@ -1,0 +1,9 @@
+{
+    "apps": [
+        {
+            "name": "tbot",
+            "script": "./build/index.js",
+            "autorestart": true
+        }
+    ]
+}
