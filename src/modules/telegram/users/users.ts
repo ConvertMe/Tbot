@@ -1,6 +1,6 @@
-import { pool } from "../db/db"
+import { pool } from "../../db/db"
 
-class TelegramUsers {
+class UsersService {
 
   async createUser(data: { phone: string | null, login: string, role?: string }) {
     try {
@@ -8,7 +8,6 @@ class TelegramUsers {
         [data.phone, data.login, data.role || 'user'])
       return result
     } catch (e) {
-      console.log(e)
       throw e
     }
   }
@@ -46,11 +45,20 @@ class TelegramUsers {
       const result: any = await pool.query('DELETE FROM users WHERE login = ?', [login])
       return result[0].affectedRows > 0
     } catch (e) {
-      console.log(e)
 
       throw e
     }
   }
+
+  async isAuth(login: string): Promise<boolean> {
+    try {
+      const users: any = await pool.query('select * FROM users WHERE login = ?', [login])
+      if(users[0][0]) return true
+      else return false
+    } catch {
+      return false
+    }
+  }
 }
 
-export default new TelegramUsers()
+export default new UsersService()
