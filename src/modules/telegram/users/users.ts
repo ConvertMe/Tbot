@@ -1,4 +1,6 @@
 import { pool } from "../../db/db"
+import { SelectResponseDBT } from "../../db/types"
+import { UserI } from "./types"
 
 class UsersService {
 
@@ -50,13 +52,12 @@ class UsersService {
     }
   }
 
-  async isAuth(login: string): Promise<boolean> {
+  async isAuth(login: string): Promise<UserI | undefined> {
     try {
-      const users: any = await pool.query('select * FROM users WHERE login = ?', [login])
-      if(users[0][0]) return true
-      else return false
+      const users: SelectResponseDBT = await pool.query('select * FROM users WHERE login = ?', [login])
+      return users[0][0]
     } catch {
-      return false
+      return 
     }
   }
 }

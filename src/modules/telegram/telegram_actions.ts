@@ -3,6 +3,10 @@ import usersService from "./users/users"
 import axios from 'axios'
 import { createWriteStream } from "fs"
 import otherService from "../other/other.service"
+import { pool } from "../db/db"
+import { SelectResponseDBT } from "../db/types"
+import sessionService from "./session/session.service"
+import { ComplexI } from "./session/types"
 
 export default class TelegramActions {
 
@@ -13,28 +17,54 @@ export default class TelegramActions {
     }
 
     executeActions() {
+        try {
+            this.bot.on('callback_query', this.callbackQuery)
+            this.bot.on('new_chat_members', async (ctx) => await this.handleNewChatMembers(ctx))
+            this.bot.on('left_chat_member', this.handleLeftChatMemberasync)
+            this.bot.on("photo", this.handlePhoto)
+            this.bot.on('document', this.handleDocument)
+            this.bot.on('video', this.handleVideo)
+            this.bot.on("video_note", this.handleVideoNote)
+        } catch (e) {
+            console.log(e)
+        }
 
-        this.bot.on('new_chat_members', this.handleNewChatMembers)
-        this.bot.on('left_chat_member', this.handleLeftChatMemberasync)
-        this.bot.on("photo", this.handlePhoto)
-        this.bot.on('document', this.handleDocument)
-        this.bot.on('video', this.handleVideo)
-        this.bot.on("video_note", this.handleVideoNote)
+    }
+    private async callbackQuery(ctx: any) {
+        if (!ctx.callbackQuery && !ctx.callbackQuery.data) return
+        const callbackData = ctx.callbackQuery.data as string
+        const regExp = new RegExp("complexId=")
 
+        if (regExp.test(callbackData)) {
+            const username = ctx.chat.username
+            const complex: ComplexI = await pool.execute('select * from complex where id = ?', [Number(callbackData.split("=")[1])]).then((r: SelectResponseDBT<ComplexI>) => r[0][0])
+            const user = await pool.execute('select * from users where login = ?', [username]).then((r: SelectResponseDBT) => r[0][0])
+            const session = await sessionService.getSession(user)
+            await sessionService.updateUsersValues("lastResComplexId", complex.name, session)
+            ctx.reply('Вы хотите предоставить доступ к гео или описать текстом?', {
+                reply_markup: {
+                    inline_keyboard: [{ text: `Гео`, callback_data: `geo`}, { text: `Текстом`, callback_data: `geodescription`}]
+            }})
+
+        }
     }
 
     private async handleNewChatMembers(ctx: any) {
-
+        
         try {
-            await this.cheackAdminForGroup(ctx)
+            try {
+                await this.cheackAdminForGroup(ctx)
+            } catch (e) {
+                return ctx.reply(`В этой группе я работать не буду!`)
+            }
+            
+            for (let i = 0; i < ctx.message.new_chat_members.length; i++) {
+                if (ctx.message.new_chat_members[i].username) await usersService.createUser({ login: ctx.message.new_chat_members[i].username!, phone: null })
+                ctx.reply(`Добро пожаловать, ${ctx.message.new_chat_members[i].username}!`)
+    
+            }
         } catch (e) {
-            return ctx.reply(`В этой группе я работать не буду!`)
-        }
-
-        for (let i = 0; i < ctx.message.new_chat_members.length; i++) {
-            if (ctx.message.new_chat_members[i].username) await usersService.createUser({ login: ctx.message.new_chat_members[i].username!, phone: null })
-            ctx.reply(`Добро пожаловать, ${ctx.message.new_chat_members[i].username}!`)
-
+            console.log(e)
         }
     }
 

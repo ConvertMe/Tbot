@@ -11,6 +11,8 @@ export interface HandlerSessionI {
 }
 
 export interface SessionI {
+    launched: boolean
+    finished: boolean
     phoneRecorded: boolean
     nameRecorded: boolean
     resComplexId: number | null
@@ -24,4 +26,10 @@ export interface SessionI {
         description: string | null
     }
     description: string | null
+}
+
+export interface ComplexI {
+    id: number
+    name: string
+    createdAt: string
 }

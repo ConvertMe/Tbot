@@ -18,3 +18,10 @@ CREATE TABLE `session` (
   PRIMARY KEY (id),
   UNIQUE KEY `userId` (`userId`)
 );
+
+CREATE TABLE `complex` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
