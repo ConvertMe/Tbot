@@ -4,6 +4,7 @@ export interface UserI {
     phone?: string | null
     name?: string | null
     role: string
+    lastResComplexId: number | null
     isDisabled: boolean
     createdAt: Date
 }

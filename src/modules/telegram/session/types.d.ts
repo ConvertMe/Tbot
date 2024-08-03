@@ -1,18 +1,20 @@
+import { UserI } from "../users/types"
+
 export interface StructDBSessionI {
     id: number
     userId: number
+    launched: 0 | 1 | boolean
     session: SessionI
 }
 
 export interface HandlerSessionI {
     id: number
     user: UserI
+    launched: 0 | 1 | boolean
     session: SessionI
 }
 
 export interface SessionI {
-    launched: boolean
-    finished: boolean
     phoneRecorded: boolean
     nameRecorded: boolean
     resComplexId: number | null

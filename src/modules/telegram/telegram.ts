@@ -1,8 +1,9 @@
-import { Telegraf, session } from 'telegraf'
+import { Telegraf } from 'telegraf'
 import dotenv from "dotenv"
-import usersService from './users/users'
-import sessionService from './session/session.service'
 import TelegramActions from './telegram_actions'
+import otherService from '../other/other.service'
+import TelegramCommands from './telegram_commands'
+import sessionService from './session/session.service'
 dotenv.config()
 
 export class TelegramBot {
@@ -11,11 +12,11 @@ export class TelegramBot {
   constructor(token: string) {
     this.bot = new Telegraf(token)
 
+
+    new TelegramCommands(this.bot).executeComands()
     new TelegramActions(this.bot).executeActions()
-
-    this.bot.command('start', async (ctx: any) => await this.toReact(ctx, "start"))
-
-    this.bot.on("message", async (ctx: any) => await this.toReact(ctx))
+    
+    this.bot.on("message", async (ctx: any) => await sessionService.toReact(ctx))
 
   }
 
@@ -23,29 +24,8 @@ export class TelegramBot {
     try {
       await this.bot.launch()
     } catch (e) {
+      otherService.writelog("error", e)
       console.log("telegram error")
     }
   }
-
-  private async toReact(ctx: any, type?: "start") {
-    try {
-      const username: string = ctx.chat.username
-      if(!username) return
-      if(type === "start") ctx.reply(`Здравствуйте ${username}!\nЯ чат-бот управляющих компаний ГК ТОЧНО`)
-      const isAuth = await usersService.isAuth(username)
-      
-      if(!isAuth) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
-      
-      const session = await sessionService.handler(username, isAuth)
-  
-      ctx.reply(session.msg)
-      return
-    } catch (e) {
-      console.log(e)
-    }
-  }
-
-
-
-
 }

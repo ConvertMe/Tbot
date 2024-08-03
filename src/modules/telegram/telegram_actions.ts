@@ -19,32 +19,50 @@ export default class TelegramActions {
     executeActions() {
         try {
             this.bot.on('callback_query', this.callbackQuery)
-            this.bot.on('new_chat_members', async (ctx) => await this.handleNewChatMembers(ctx))
+            this.bot.on('new_chat_members', this.handleNewChatMembers)
             this.bot.on('left_chat_member', this.handleLeftChatMemberasync)
             this.bot.on("photo", this.handlePhoto)
             this.bot.on('document', this.handleDocument)
             this.bot.on('video', this.handleVideo)
             this.bot.on("video_note", this.handleVideoNote)
         } catch (e) {
+            otherService.writelog("error", e)
             console.log(e)
         }
 
     }
+
     private async callbackQuery(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if(!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
         if (!ctx.callbackQuery && !ctx.callbackQuery.data) return
         const callbackData = ctx.callbackQuery.data as string
         const regExp = new RegExp("complexId=")
 
+        cfdsfdsfds
         if (regExp.test(callbackData)) {
-            const username = ctx.chat.username
-            const complex: ComplexI = await pool.execute('select * from complex where id = ?', [Number(callbackData.split("=")[1])]).then((r: SelectResponseDBT<ComplexI>) => r[0][0])
-            const user = await pool.execute('select * from users where login = ?', [username]).then((r: SelectResponseDBT) => r[0][0])
-            const session = await sessionService.getSession(user)
-            await sessionService.updateUsersValues("lastResComplexId", complex.name, session)
-            ctx.reply('Вы хотите предоставить доступ к гео или описать текстом?', {
-                reply_markup: {
-                    inline_keyboard: [{ text: `Гео`, callback_data: `geo`}, { text: `Текстом`, callback_data: `geodescription`}]
-            }})
+            const complexId = Number(callbackData.split("=")[1])
+            //if complexId === 0 need reload send buttons
+            if(complexId === 0) {
+                
+                const complexesButtom = await sessionService.getComplexes()
+                ctx.reply(`${user.name || ctx.chat.username} выберите пожалуйста, ЖК в который хотите оставить заявку`, complexesButtom)
+
+                return
+            } else {
+
+                const complex: ComplexI = await pool.execute('select * from complex where id = ?', []).then((r: SelectResponseDBT<ComplexI>) => r[0][0])
+                const session = await sessionService.getSession(user)
+                await sessionService.updateUsersValues("lastResComplexId", String(complex.id), session)
+    
+                await ctx.editMessageReplyMarkup({ inline_keyboard: [] })
+                await ctx.deleteMessage()
+    
+               const next = sessionService.reactToGeo() 
+               ctx.reply(next.msg, next.buttons)
+               return
+            }
+
 
         }
     }
@@ -64,7 +82,7 @@ export default class TelegramActions {
     
             }
         } catch (e) {
-            console.log(e)
+            throw e
         }
     }
 
