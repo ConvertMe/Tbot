@@ -1,12 +1,11 @@
 import { Telegraf } from "telegraf"
 import usersService from "./users/users"
-import axios from 'axios'
-import { createWriteStream } from "fs"
 import otherService from "../other/other.service"
 import { pool } from "../db/db"
 import { SelectResponseDBT } from "../db/types"
 import sessionService from "./session/session.service"
-import { ComplexI } from "./session/types"
+import { ComplexI,  } from "./session/types"
+import filesService from "../files/files.service"
 
 export default class TelegramActions {
 
@@ -18,7 +17,13 @@ export default class TelegramActions {
 
     executeActions() {
         try {
-            this.bot.on('callback_query', this.callbackQuery)
+            this.bot.action("geo", this.geo)
+            this.bot.action("geodescription", this.geodescription)
+            this.bot.action(/^geoSpot=/, this.geoSpot)
+            this.bot.action(/^complexId=/, this.complexId)
+            this.bot.action(/^sessionContent=/, this.sessionContent)
+            this.bot.action("contendEnd", this.contendEnd)
+            this.bot.on("location", this.location)
             this.bot.on('new_chat_members', this.handleNewChatMembers)
             this.bot.on('left_chat_member', this.handleLeftChatMemberasync)
             this.bot.on("photo", this.handlePhoto)
@@ -32,43 +37,129 @@ export default class TelegramActions {
 
     }
 
-    private async callbackQuery(ctx: any) {
+    private async contendEnd(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if(!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user) 
+        session.session.content.process = "streamEnd"
+        await sessionService.updateSession(session)
+
+
+        //login to end
+        return ctx.reply("end session")
+    }
+
+    private async sessionContent(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if(!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        if (!ctx.callbackQuery && !ctx.callbackQuery.data) return
+        const spot: "yes" | "no" = ctx.callbackQuery.data.split("=")[1] as "yes" | "no"
+        session.session.content.process =  spot === "yes" ? "streamOn" : "streamEnd"
+        await sessionService.updateSession(session)
+
+        if(spot === "yes") ctx.reply(`Пришлите медиафайл (изображение или видео)`)
+        if(spot === "no") ctx.reply(`Заявка сформированна`)
+        return
+
+    }
+
+    private async location(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if(!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        session.session.geo.type = "description"
+        const location = ctx.message.location
+        await pool.execute(`insert into queueForReverseGeocoding (chatId, userId, latitude, longitude) values (?,?,?,?)`, [ctx.chat.id, user.id, location.latitude, location.longitude])
+        ctx.reply(`Выполняется загрузка координат, пожалуйста подождите...`)
+        return
+    }
+
+    private async geo(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if(!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        session.session.geo.type = "description"
+        await pool.execute(`update session set session=? where userId = ?`, [session.session, session.user.id])
+        ctx.reply("Подтверждаете что вы на месте инцидента?", {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: "Да", callback_data: "geoSpot=yes" },
+                        { text: "Нет", callback_data: "geoSpot=no" }
+                    ]
+                ]
+            }
+        })
+
+    }
+
+    private async geoSpot(ctx: any) {
+        const callbackData = ctx.callbackQuery.data as string
         const user = await usersService.isAuth(ctx.chat.username)
         if(!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
         if (!ctx.callbackQuery && !ctx.callbackQuery.data) return
-        const callbackData = ctx.callbackQuery.data as string
-        const regExp = new RegExp("complexId=")
 
-        cfdsfdsfds
-        if (regExp.test(callbackData)) {
-            const complexId = Number(callbackData.split("=")[1])
-            //if complexId === 0 need reload send buttons
-            if(complexId === 0) {
-                
-                const complexesButtom = await sessionService.getComplexes()
-                ctx.reply(`${user.name || ctx.chat.username} выберите пожалуйста, ЖК в который хотите оставить заявку`, complexesButtom)
+        const spot: "yes" | "no" = callbackData.split("=")[1] as "yes" | "no"
+        const session = await sessionService.getSession(user)
+        session.session.geo.type = spot === "yes" ? "onSpot" : "geo"
+        await sessionService.updateSession(session)
 
-                return
-            } else {
+        ctx.reply('Поделитесь своим местоположением', spot === "yes" 
+            ? {
+            reply_markup: {
+                keyboard: [
+                    [
+                        {
+                            text: 'Поделиться местоположением',
+                            request_location: true,
+                        },
+                    ],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+            },
+        }
+        : undefined)
 
-                const complex: ComplexI = await pool.execute('select * from complex where id = ?', []).then((r: SelectResponseDBT<ComplexI>) => r[0][0])
-                const session = await sessionService.getSession(user)
-                await sessionService.updateUsersValues("lastResComplexId", String(complex.id), session)
-    
-                await ctx.editMessageReplyMarkup({ inline_keyboard: [] })
-                await ctx.deleteMessage()
-    
-               const next = sessionService.reactToGeo() 
-               ctx.reply(next.msg, next.buttons)
-               return
-            }
+        return
+    }
 
+   
 
+    private async geodescription(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if (!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        session.session.geo.type = "description"
+        await pool.execute(`update session set session=? where userId = ?`, [session.session, session.user.id])
+        ctx.reply("Пришлите текствое описание")
+    }
+
+    private async complexId(ctx: any) {
+        const user = await usersService.isAuth(ctx.chat.username)
+        if (!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        if (!ctx.callbackQuery && !ctx.callbackQuery.data) return
+        const complexId = Number(ctx.callbackQuery.data.split("=")[1])
+        if (complexId === 0) {
+
+            const complexesButtom = await sessionService.getComplexes()
+            ctx.reply(`${user.name || ctx.chat.username} выберите пожалуйста, ЖК в который хотите оставить заявку`, complexesButtom)
+
+            return
+        } else {
+            const complex: ComplexI = await pool.execute('select * from complex where id = ?', [complexId]).then((r: SelectResponseDBT<ComplexI>) => r[0][0])
+            const session = await sessionService.getSession(user)
+
+            await sessionService.updateUsersValues("lastResComplexId", String(complex.id), session)
+            const next = sessionService.reactToGeo()
+            ctx.reply(next.msg, next.buttons)
+            return
         }
     }
 
     private async handleNewChatMembers(ctx: any) {
-        
+
         try {
             try {
                 await this.cheackAdminForGroup(ctx)
@@ -79,8 +170,8 @@ export default class TelegramActions {
             for (let i = 0; i < ctx.message.new_chat_members.length; i++) {
                 if (ctx.message.new_chat_members[i].username) await usersService.createUser({ login: ctx.message.new_chat_members[i].username!, phone: null })
                 ctx.reply(`Добро пожаловать, ${ctx.message.new_chat_members[i].username}!`)
-    
             }
+
         } catch (e) {
             throw e
         }
@@ -101,87 +192,117 @@ export default class TelegramActions {
         }
     }
 
+
+
     private async handlePhoto(ctx: any) {
 
-        const username = ctx.chat.username
-
+        const user = await usersService.isAuth(ctx.chat.username)
+        if (!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        if(session.session.content.process !== "streamOn") return sessionService.toReact(ctx)
+        
+        
         if (ctx.update && ctx.update.message && ctx.update.message.photo && Array.isArray(ctx.update.message.photo)) {
             const file_id = ctx.update.message.photo[ctx.update.message.photo.length - 1]["file_id"]
-            const fileLink = await ctx.telegram.getFileLink(file_id)
-            console.log(fileLink)
-            ctx.reply(`Фото`)
-            return
-        }
+            
+            await filesService.saveFile("img", file_id, session)
 
+            return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: "Завершить", callback_data: "contendEnd" },
+                        ]
+                    ]
+                }})
+        }
+        return ctx.reply("Файл не опознан")
     }
 
     private async handleDocument(ctx: any) {
 
-        const username = ctx.chat.username
         const fileId = ctx.message.document.file_id
+
+        const user = await usersService.isAuth(ctx.chat.username)
+        if (!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        if(session.session.content.process !== "streamOn") return sessionService.toReact(ctx)
+
         const fileName = ctx.message.document.file_name
         const fileExtension = fileName.split('.').pop().toLowerCase()
 
         if (fileExtension === 'png' || fileExtension === 'jpg' || fileExtension === 'jpeg' || 'mp4' || "webm") {
-            //bl
-            ctx.reply(fileExtension)
-            return
+            switch(fileExtension) {
+                case "png": await filesService.saveFile("img", fileId, session); break
+                case "jpg": await filesService.saveFile("img", fileId, session); break 
+                case "mp4": await filesService.saveFile("video", fileId, session); break 
+                case "webm": await filesService.saveFile("video", fileId, session); break
+                default: break 
+            }
+            return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: "Завершить", callback_data: "contendEnd" },
+                        ]
+                    ]
+                }})
 
         } else return ctx.reply('❌ Формат файла не поддерживается.')
     }
 
     private async handleVideo(ctx: any) {
-        const username = ctx.chat.username
+        const user = await usersService.isAuth(ctx.chat.username)
+        if (!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        if(session.session.content.process !== "streamOn") return sessionService.toReact(ctx)
+
         const fileId = ctx.message.video.file_id
         const fileName = ctx.message.video.file_name || 'video.mp4'
         const fileExtension = fileName.split('.').pop().toLowerCase()
 
-
         const supportedVideoFormats = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'mpeg']
 
         if (supportedVideoFormats.includes(fileExtension)) {
-            ctx.reply(`Получено видео: ${fileExtension}`)
 
-            // Получаем ссылку на видео
-            const fileUrl = await ctx.telegram.getFileLink(fileId)
+            await filesService.saveFile("video", fileId, session)
 
-            // logic
-            return ctx.reply(`Ссылка на ваше видео: ${fileUrl}`)
+            return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: "Завершить", callback_data: "contendEnd" },
+                    ]
+                ]
+            }})
         } else {
             return ctx.reply('❌ Формат видео не поддерживается.')
         }
     }
 
     private async handleVideoNote(ctx: any) {
+
+        const user = await usersService.isAuth(ctx.chat.username)
+        if (!user) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
+        const session = await sessionService.getSession(user)
+        if(session.session.content.process !== "streamOn") return sessionService.toReact(ctx)
+
         if (!ctx || !ctx.message.video_note) {
             return ctx.reply('❌ Ошибка: контекст или видеозаметка не определены.')
         }
 
         const fileId = ctx.message.video_note.file_id
+        await filesService.saveFile("video", fileId, session)
 
-        try {
-            const fileLink = await ctx.telegram.getFileLink(fileId)
-            console.log('Ссылка на видеозаметку:', fileLink)
-
-            // Загружаем видеозаметку
-            const response = await axios.get(fileLink, { responseType: 'stream' })
-            const filePath = otherService.getPathToStorage() + `/${fileId}.mp4`
-
-            const writer = createWriteStream(filePath)
-            response.data.pipe(writer);
-
-            writer.on('finish', () => {
-                ctx.reply(`✅ Видеозаметка успешно загружена: ${filePath}`);
-            });
-
-            writer.on('error', (err) => {
-                console.error('Ошибка при сохранении файла:', err);
-                ctx.reply('❌ Ошибка при загрузке видеозаметки.');
-            });
-        } catch (error) {
-            console.error('Ошибка при получении файла:', error);
-            ctx.reply('❌ Произошла ошибка при получении видеозаметки.');
-        }
+        return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: "Завершить", callback_data: "contendEnd" },
+                    ]
+                ]
+            }})
+    
     }
 
     private async cheackAdminForGroup(ctx: any) {

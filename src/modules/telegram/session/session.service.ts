@@ -1,3 +1,4 @@
+import {v4} from "uuid"
 import { pool } from "../../db/db"
 import { InsertResponseDBT, SelectResponseDBT,  UpdateResponseDBT } from "../../db/types"
 import otherService from "../../other/other.service"
@@ -20,12 +21,12 @@ class SessionService {
           let msg = ""
           if(ctx.update && ctx.update.message && ctx.update.message.text) msg = ctx.update.message.text
           if(!username) return
-          if(type === "start") ctx.reply(`Здравствуйте ${username}!\nЯ чат-бот управляющих компаний ГК ТОЧНО`)
           const isAuth = await userService.isAuth(username)
-          
           if(!isAuth) return ctx.reply(`Извините, не нашёл вас в списке пользователей группы Амбассадоров ЖК, обратитесь к администратору группы`)
           
-          const session = await this.handler(msg, isAuth)
+          if(type === "start") ctx.reply(`Здравствуйте ${isAuth.name || username}!\nЯ чат-бот управляющих компаний ГК ТОЧНО`)
+          
+          const session = await this.handler(msg, isAuth, ctx)
       
           ctx.reply(session.msg, session.buttons)
           return
@@ -35,35 +36,36 @@ class SessionService {
         }
       }
 
-    async handler(msg: string, user: UserI): Promise<{msg: string, buttons?: TelegramButtonI}> {
+    async handler(msg: string, user: UserI, ctx: any): Promise<{msg: string, buttons?: TelegramButtonI}> {
         try {
-            const session = await this.getSession(user)
+            let session = await this.getSession(user)
             //handle
             if((session.user.name || session.user.phone) && !session.launched) {
                 console.log('0')
-                await this.updateSession({...session, launched: true, session: {...session.session, 
+                const newSession = JSON.parse(JSON.stringify({...session.session, 
                     nameRecorded: session.user.name ? true : false,
-                    phoneRecorded: session.user.phone ? true : false,
-                }})
-
+                    phoneRecorded: session.user.phone ? true : false
+                }))
+                await this.updateSession({...session, launched: true, session: newSession})
+                session = {...session, session: newSession}
                 //recursive
-                return await this.handler(msg, user)
+                return await this.handler(msg, user, ctx)
 
-            } else if(!session.launched) {
+            } 
+            if(!session.launched) {
                 console.log("1")
                 await this.updateSession({...session,  launched: true, session: {...session.session}})
                 return {msg: this.yourName}
             } 
             
             if(!session.session.nameRecorded) {
-                console.log("2")
 
                 const result = await this.updateUsersValues("name", msg, {...session, session: {...session.session, nameRecorded: true}})
                 if(!result) throw new Error()
                
                 return {msg: this.yourPhone}
-
-            } else if(!session.session.phoneRecorded) {
+            } 
+            if(!session.session.phoneRecorded) {
                 console.log("3")
 
                 const result = await this.updateUsersValues("phone", msg, {...session, session: {...session.session, phoneRecorded: true}})
@@ -71,21 +73,51 @@ class SessionService {
 
                 return {msg: `${user.name!} выберите пожалуйста, ЖК в который хотите оставить заявку`, buttons: await this.getComplexes()}
                 //continion in actions
-            } else if(session.session.phoneRecorded && !session.session.resComplexId) {
-                if(session.user.lastResComplexId) {
-                    return {msg: `${user.name!} последний ЖК в котором вы оставляли заявку`, buttons: await this.getComplexes(session.user.lastResComplexId)}
-                } else  return {msg: `${user.name!} выберите пожалуйста, ЖК в который хотите оставить заявку`, buttons: await this.getComplexes()}
-            } else if(!session.session.resComplexId || 
-                (!session.session.geo.description && !session.session.geo.geolocation)
-            ) {
+            }
+            if(session.session.phoneRecorded && !session.session.resComplexId) {
                 console.log("4")
+
+                if(session.user.lastResComplexId) {
+                    const complex: ComplexI | undefined = await pool.execute('select * from complex where id = ?', [session.user.lastResComplexId]).then((r: SelectResponseDBT) => r[0][0])
+                    if(complex) return {msg: `Оставить заявку в ЖК "${complex.name}"`, buttons: await this.getComplexes(session.user.lastResComplexId)}
+                    else return {msg: `${user.name!} последний ЖК в котором вы оставляли заявку`, buttons: await this.getComplexes()}
+                } else  return {msg: `${user.name!} выберите пожалуйста, ЖК в который хотите оставить заявку`, buttons: await this.getComplexes()}
+            }
+            
+            if(!session.session.resComplexId || 
+                (!session.session.geo.description && !session.session.geo.geolocation && session.session.geo.type === "empty")
+            ) {
+                console.log("5")
                 return this.reactToGeo()
                 
+            } 
+            
+            if(session.session.geo.type !== 'empty' && (session.session.geo.description === null && session.session.geo.geolocation === null)) {
+                switch(session.session.geo.type) {
+                    case "geo": await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: msg}}}); break
+                    case "onSpot": await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: msg}}}); break
+                    case "description": await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, description: msg}}}); break
+                    default: break
+                }
+
+                return {msg: `Загружаем фото или видео контент?`, buttons:{
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: "Да", callback_data: "sessionContent=yes" },
+                                    { text: "Нет", callback_data: "sessionContent=no" }
+                                ]
+                            ]
+                        }}
+                }
             }
-            console.log("end session")
+            
+            if(session.session.content.process === "streamOn") {
+                return {msg: "Пришлите медиафайл"}
+            }
+
             return {msg: "end session"}
         } catch (e) {
-            console.log(e)
             otherService.writelog("error", e)
             return {msg: "Произошла ошибка, повторите свою попытку позже"}
         }
@@ -107,7 +139,7 @@ class SessionService {
             let sessionDb: StructDBSessionI | undefined = await pool.execute(`select * from session where userId = ?`, [user.id]).then((r: any) => r[0][0] as StructDBSessionI)
             
             if(!sessionDb) {
-                sessionDb = await pool.execute(`insert into session (userId, session) values (?, ?)`, [user.id, JSON.stringify(this.getEmptySession())])
+                sessionDb = await pool.execute(`insert into session (userId, hash, session) values (?, ?, ?)`, [user.id, v4(), JSON.stringify(this.getEmptySession())])
                 .then( async (r: InsertResponseDBT) => await pool.execute(`select * from session where userId = ?`, [user.id]).then((r: any) => r[0][0] as StructDBSessionI))
             }
             if(!sessionDb) throw new Error()
@@ -132,10 +164,13 @@ class SessionService {
             if(lastResComplexId) {
                 complexes = complexes.filter(c => c.id === lastResComplexId)
                 if(complexes.length === 0) complexes.push({id: 0, name: "ЖК не найден, показать все?", createdAt: String(new Date())})
-                else complexes.push({id: 0, name: "Показать все?", createdAt: String(new Date())})
+                else {
+                    complexes[0].name = `Продолжить`
+                    complexes.push({id: 0, name: "Другой ЖК", createdAt: String(new Date())})
+                }
                 return {
                     reply_markup: {
-                        inline_keyboard: complexes.map(c => ([{ text: `${c.name}`, callback_data: `complexId=${c.id}`}]))
+                        inline_keyboard: complexes.map(c => ([{ text: c.name, callback_data: `complexId=${c.id}`}]))
                     }}
             } else {
                 return {
@@ -153,13 +188,11 @@ class SessionService {
         try {
             return await pool.execute(`update users set ${type}=? where id = ?`, [msg, session.user.id])
             .then(async (r: UpdateResponseDBT) => {
-                if(r[0].changedRows) {
                     if(type === "name") session.session.nameRecorded = true
                     if(type === "phone") session.session.phoneRecorded = true
                     if(type === "lastResComplexId") session.session.resComplexId = Number(msg)
                     await this.updateSession(session)
                     return true
-                } else return false
             })
 
         } catch (e) {
@@ -167,7 +200,7 @@ class SessionService {
         }
     }
 
-    private async setDescription(msg: string, session: HandlerSessionI): Promise<boolean> {
+    async setDescription(msg: string, session: HandlerSessionI): Promise<boolean> {
         try {
             return await pool.execute(`update session set session=? where userId = ?`, [{...session.session, description: msg}, session.user.id])
             .then((r: UpdateResponseDBT) => r[0].changedRows ? true : false)
@@ -176,13 +209,15 @@ class SessionService {
         }
     }
 
-    private async setGeo(type: "txt" | "geo" | "geoOnSpot", msg: string, session: HandlerSessionI): Promise<boolean> {
+    async setGeo(payload:{description?: string, geo?: any}, session: HandlerSessionI): Promise<boolean> {
         try {
+            if(!payload.description && !payload.geo) throw new Error()
+            if(session.session.geo.type === "empty") throw new Error()
     
-            switch(type) {
-                case "txt": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, description: msg}}})
-                case "geo": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: msg}}})
-                case "geoOnSpot": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: msg, onSpot: true}}})
+            switch(session.session.geo.type) {
+                case "description": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, description: payload.description!}}})
+                case "geo": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: payload.geo!}}})
+                case "onSpot": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: payload.geo!}}})
                 default: return false
             }
 
@@ -191,7 +226,7 @@ class SessionService {
         } 
     }
 
-    private async addContent(type: "img" | "video", urlContent: string, session: HandlerSessionI) {
+    async addContent(type: "img" | "video", urlContent: string, session: HandlerSessionI) {
         try {
             switch(type) {
                 case "img": return await this.updateSession({...session, session: {...session.session, content: {...session.session.content, images: [...session.session.content.images, urlContent]}}})
@@ -203,7 +238,7 @@ class SessionService {
         }
     }
 
-    private async updateSession (session: HandlerSessionI): Promise<boolean> {
+    async updateSession (session: HandlerSessionI): Promise<boolean> {
         return await pool.execute(`update session set  launched=?, session=? where userId = ?`, [session.launched, JSON.stringify(session.session), session.user.id])
         .then((r: UpdateResponseDBT) => r[0].changedRows ? true : false)
     } 
@@ -213,9 +248,8 @@ class SessionService {
             nameRecorded: false,
             phoneRecorded: false,
             resComplexId: null,
-            description: null,
-            geo: {description: null, geolocation: null, onSpot: false},
-            content: {images: [], videos: []}
+            geo: {description: null, geolocation: null, type: "empty"},
+            content: {process: "notStarted", images: [], videos: []}
         } 
     }
 

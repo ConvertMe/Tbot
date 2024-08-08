@@ -15,14 +15,13 @@ export default class TelegramCommands {
 
     executeComands() {
         try {
-            this.bot.start(async (ctx) => sessionService.toReact(ctx, "start"))
-            this.bot.command('stop', async (ctx) => await this.exit(ctx))
-            this.bot.use(async (ctx, next) => {return})
+            this.bot.command('start', async (ctx) => await sessionService.toReact(ctx, "start"))
+            this.bot.command('stop',  this.exit)
+            this.bot.use(async (ctx, next) => {next()})
         } catch (e) {
             otherService.writelog("error", e)
             console.log(e)
         }
-
     }
 
     private async exit(ctx: any) {

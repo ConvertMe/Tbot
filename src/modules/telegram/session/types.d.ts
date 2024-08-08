@@ -2,6 +2,7 @@ import { UserI } from "../users/types"
 
 export interface StructDBSessionI {
     id: number
+    hash: string
     userId: number
     launched: 0 | 1 | boolean
     session: SessionI
@@ -9,6 +10,7 @@ export interface StructDBSessionI {
 
 export interface HandlerSessionI {
     id: number
+    hash: string
     user: UserI
     launched: 0 | 1 | boolean
     session: SessionI
@@ -19,15 +21,15 @@ export interface SessionI {
     nameRecorded: boolean
     resComplexId: number | null
     content: {
+        process: "notStarted" | "streamOn" | "streamEnd"
         images: string[]
         videos: string[]
     }
     geo: {
-        onSpot: boolean
-        geolocation: any | null
+        type: "onSpot" | "geo" | "description" | "empty"
+        geolocation: string | null
         description: string | null
     }
-    description: string | null
 }
 
 export interface ComplexI {
