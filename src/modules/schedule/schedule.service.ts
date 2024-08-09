@@ -58,7 +58,7 @@ export default class ScheduleService {
             const user = await pool.execute(`select * from users where id = ?`, [queue.userId]).then((r: SelectResponseDBT<UserI>) => r[0][0] as UserI)
 
             const session = await sessionService.getSession(user)
-            await sessionService.updateSession({ ...session, session: { ...session.session, geo: { ...session.session.geo, geolocation: adres } } })
+            await sessionService.updateSession({ ...session, session: { ...session.session, geo: { ...session.session.geo, geolocation: `Широта: ${queue.latitude}\n Долгота: ${queue.longitude}\n Адрес: ${adres}`}}})
 
             await this.sendMsg(queue.chatId)
 

@@ -28,8 +28,8 @@ export interface SessionI {
     geo: {
         type: "onSpot" | "geo" | "description" | "empty"
         geolocation: string | null
-        description: string | null
     }
+    description: string | null
 }
 
 export interface ComplexI {

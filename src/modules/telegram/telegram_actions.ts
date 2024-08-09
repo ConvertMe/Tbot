@@ -158,17 +158,16 @@ export default class TelegramActions {
     }
 
     private async handleNewChatMembers(ctx: any) {
-
         try {
             try {
-                await this.cheackAdminForGroup(ctx)
+                await usersService.cheackAdminForGroup(ctx)
             } catch (e) {
                 return ctx.reply(`В этой группе я работать не буду!`)
             }
             
             for (let i = 0; i < ctx.message.new_chat_members.length; i++) {
                 if (ctx.message.new_chat_members[i].username) await usersService.createUser({ login: ctx.message.new_chat_members[i].username!, phone: null })
-                ctx.reply(`Добро пожаловать, ${ctx.message.new_chat_members[i].username}!`)
+                ctx.reply(`Пользовтель, ${ctx.message.new_chat_members[i].username}! был добавлен в список пользователей группы Амбассадоров ЖК!`)
             }
 
         } catch (e) {
@@ -179,15 +178,15 @@ export default class TelegramActions {
     private async handleLeftChatMemberasync(ctx: any) {
 
         try {
-            await this.cheackAdminForGroup(ctx)
+            await usersService.cheackAdminForGroup(ctx)
         } catch (e) {
-            return ctx.reply(`В этой группе я работать не буду!`)
+            console.log(e)
         }
 
         const member = ctx.message.left_chat_member
         if (member.username) {
             await usersService.deleteUser(member.username!)
-            ctx.reply(`Прощай, ${member.username}! Мы будем скучать!`)
+            ctx.reply(`Пользовтель, ${member.username}! был удален из списка пользователей группы Амбассадоров ЖК!`)
         }
     }
 
@@ -304,25 +303,5 @@ export default class TelegramActions {
     
     }
 
-    private async cheackAdminForGroup(ctx: any) {
-        try {
-            const chatId = ctx.chat.id
-            const admins = await ctx.telegram.getChatAdministrators(chatId)
-
-            if (admins.length > 0) {
-                let adminVerify = false
-                admins.forEach((admin: any) => {
-                    if (admin.user.username === process.env.ROOT_TG_USER_LOGIN) return adminVerify = true
-                })
-
-                if (!adminVerify) throw new Error()
-                ctx.reply("Админ")
-            } else {
-                throw new Error()
-            }
-        } catch (error) {
-            throw new Error()
-        }
-    }
 
 }

@@ -8,6 +8,7 @@ import sessionService from './session/session.service'
 dotenv.config()
 
 export class TelegramBot {
+  
   private bot: Telegraf
 
   constructor(token: string) {
@@ -16,8 +17,12 @@ export class TelegramBot {
     new TelegramCommands(this.bot).executeComands()
     new TelegramActions(this.bot).executeActions()
 
-    this.bot.on("message", async (ctx: any) => await sessionService.toReact(ctx))
 
+    this.bot.on("message", async (ctx: any) => {
+      if(!ctx.update || !ctx.update.message || !ctx.update.message.text) return 
+      if(ctx.update && ctx.update.message && ctx.update.message.text && ctx.update.message.text.length > 2000) return ctx.reply(`Установлен лимит на длину сообщения, максимальный лимит 2000 символов\nДлина вашего сообщение: ${ctx.update.message.text.length}`)
+      return await sessionService.toReact(ctx)
+  })
   }
 
 

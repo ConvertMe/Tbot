@@ -85,37 +85,43 @@ class SessionService {
             }
             
             if(!session.session.resComplexId || 
-                (!session.session.geo.description && !session.session.geo.geolocation && session.session.geo.type === "empty")
+                (!session.session.geo.geolocation && session.session.geo.type === "empty")
             ) {
                 console.log("5")
                 return this.reactToGeo()
                 
             } 
             
-            if(session.session.geo.type !== 'empty' && (session.session.geo.description === null && session.session.geo.geolocation === null)) {
+            if(session.session.geo.type !== 'empty' && session.session.geo.type !== "description" && session.session.geo.geolocation === null) {
                 switch(session.session.geo.type) {
                     case "geo": await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: msg}}}); break
                     case "onSpot": await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: msg}}}); break
-                    case "description": await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, description: msg}}}); break
                     default: break
                 }
 
+                return {msg: "Пришлите мне текстовое описание заявки"}
+            }
+            if(!session.session.description && session.session.geo.type === "description") {
+                
+                await this.updateSession({...session, session: {...session.session, description: msg}})
+
+
                 return {msg: `Загружаем фото или видео контент?`, buttons:{
-                        reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    { text: "Да", callback_data: "sessionContent=yes" },
-                                    { text: "Нет", callback_data: "sessionContent=no" }
-                                ]
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: "Да", callback_data: "sessionContent=yes" },
+                                { text: "Нет", callback_data: "sessionContent=no" }
                             ]
-                        }}
-                }
+                        ]
+                    }}
+            }
             }
             
             if(session.session.content.process === "streamOn") {
                 return {msg: "Пришлите медиафайл"}
             }
-
+            
             return {msg: "end session"}
         } catch (e) {
             otherService.writelog("error", e)
@@ -215,7 +221,6 @@ class SessionService {
             if(session.session.geo.type === "empty") throw new Error()
     
             switch(session.session.geo.type) {
-                case "description": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, description: payload.description!}}})
                 case "geo": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: payload.geo!}}})
                 case "onSpot": return await this.updateSession({...session, session: {...session.session, geo: {...session.session.geo, geolocation: payload.geo!}}})
                 default: return false
@@ -248,8 +253,9 @@ class SessionService {
             nameRecorded: false,
             phoneRecorded: false,
             resComplexId: null,
-            geo: {description: null, geolocation: null, type: "empty"},
-            content: {process: "notStarted", images: [], videos: []}
+            geo: { geolocation: null, type: "empty"},
+            content: {process: "notStarted", images: [], videos: []},
+            description: null
         } 
     }
 

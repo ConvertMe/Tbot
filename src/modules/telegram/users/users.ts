@@ -1,6 +1,8 @@
+import dotenv from "dotenv"
 import { pool } from "../../db/db"
 import { SelectResponseDBT } from "../../db/types"
 import { UserI } from "./types"
+dotenv.config()
 
 class UsersService {
 
@@ -57,7 +59,27 @@ class UsersService {
       const users: SelectResponseDBT = await pool.query('select * FROM users WHERE login = ?', [login])
       return users[0][0]
     } catch {
-      return 
+      return
+    }
+  }
+
+  async cheackAdminForGroup(ctx: any) {
+    try {
+      const chatId = ctx.chat.id
+      const admins = await ctx.telegram.getChatAdministrators(chatId)
+
+      if (admins.length > 0) {
+        let adminVerify = false
+        admins.forEach((admin: any) => {
+          if (admin.user.username === process.env.ROOT_TG_USER_LOGIN) return adminVerify = true
+        })
+
+        if (!adminVerify) throw new Error()
+      } else {
+        throw new Error("Not Auth")
+      }
+    } catch (e) {
+      throw e
     }
   }
 }
