@@ -91,7 +91,6 @@ export default class TelegramActions {
                 ]
             }
         })
-
     }
 
     private async geoSpot(ctx: any) {
@@ -205,7 +204,7 @@ export default class TelegramActions {
         if (ctx.update && ctx.update.message && ctx.update.message.photo && Array.isArray(ctx.update.message.photo)) {
             const file_id = ctx.update.message.photo[ctx.update.message.photo.length - 1]["file_id"]
             
-            await filesService.saveFile("img", file_id, session)
+            await filesService.saveFile("img", file_id, "jpg", session)
 
             return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
                 reply_markup: {
@@ -233,10 +232,10 @@ export default class TelegramActions {
 
         if (fileExtension === 'png' || fileExtension === 'jpg' || fileExtension === 'jpeg' || 'mp4' || "webm") {
             switch(fileExtension) {
-                case "png": await filesService.saveFile("img", fileId, session); break
-                case "jpg": await filesService.saveFile("img", fileId, session); break 
-                case "mp4": await filesService.saveFile("video", fileId, session); break 
-                case "webm": await filesService.saveFile("video", fileId, session); break
+                case "png": await filesService.saveFile("img", fileId, fileExtension, session); break
+                case "jpg": await filesService.saveFile("img", fileId, fileExtension, session); break 
+                case "mp4": await filesService.saveFile("video", fileId, fileExtension, session); break 
+                case "webm": await filesService.saveFile("video", fileId, fileExtension, session); break
                 default: break 
             }
             return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
@@ -265,7 +264,7 @@ export default class TelegramActions {
 
         if (supportedVideoFormats.includes(fileExtension)) {
 
-            await filesService.saveFile("video", fileId, session)
+            await filesService.saveFile("video", fileId, fileExtension, session)
 
             return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
             reply_markup: {
@@ -292,7 +291,7 @@ export default class TelegramActions {
         }
 
         const fileId = ctx.message.video_note.file_id
-        await filesService.saveFile("video", fileId, session)
+        await filesService.saveFile("video", fileId, "mp4", session)
 
         return ctx.reply(`Файл сохранён!\nПришлите медиафайл (изображение или видео)`, {            
             reply_markup: {

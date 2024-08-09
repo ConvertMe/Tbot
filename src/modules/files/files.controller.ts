@@ -11,11 +11,10 @@ class TelegramFilesController {
             
             const file = await filesService.getFile(filehash)
             
-            res.sendFile(file, )
+            res.sendFile(file)
             return
 
         } catch (e) {
-            console.log(e)
             res.sendFile(join(__dirname, '404.html'))
             return
         }

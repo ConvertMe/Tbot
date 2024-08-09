@@ -5,6 +5,7 @@ export interface ContentFileI {
     fileHash: string
     sessionHash: string
     format: "video" | "img"
+    extension: string
     createdAt: Date
 }
 

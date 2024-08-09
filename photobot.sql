@@ -44,3 +44,17 @@ CREATE TABLE garbageСollectorFiles (
   createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 );
+
+CREATE TABLE telegramFiles (
+    id INT NOT NULL AUTO_INCREMENT,
+    telegramFileId VARCHAR(100) NOT NULL,
+    userId INT NOT NULL,
+    fileHash VARCHAR(100) NOT NULL,
+    sessionHash VARCHAR(100) NOT NULL,
+    format ENUM('img', 'video') NOT NULL,
+    extension VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+
+CREATE INDEX idx_fileHash ON telegramFiles (fileHash);

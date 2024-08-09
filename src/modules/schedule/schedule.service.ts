@@ -22,7 +22,7 @@ export default class ScheduleService {
             }
         })
 
-        schedule.scheduleJob('* * * * * *', async () => {
+        schedule.scheduleJob('* * 0 * * *', async () => {
             try {
                 await this.garbageСollectorFiles()
             } catch (e) {
@@ -93,9 +93,18 @@ export default class ScheduleService {
             const files: GarbageСollectorFilesI[] = await pool.execute(`
                     SELECT *
                     FROM garbageСollectorFiles
-                    WHERE createdAt < NOW() - INTERVAL 1 DAY`).then((r: SelectResponseDBT) => r[0])
+                    `)
+                    .then((r: SelectResponseDBT) => r[0])
+
+            /* WHERE createdAt < NOW() - INTERVAL 1 DAY */
             for (let i = 0; i < files.length; i++) {
-                unlinkSync(files[i].pathToFile)
+                try {
+                    unlinkSync(files[i].pathToFile)
+                } catch (e) {
+                    
+                } finally {
+                    await pool.execute('delete garbageСollectorFiles where id = ?', [files[i].id])
+                }
             }
         } catch (e) {
             throw e

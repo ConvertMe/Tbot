@@ -7,7 +7,7 @@ import { ContentFileI, TelegramResponseGetLinkI } from "./types"
 import axios from "axios"
 import dotenv from "dotenv"
 import otherService from "../other/other.service"
-import { createWriteStream, readdirSync, readFileSync, unlinkSync } from "fs"
+import { createWriteStream, readdirSync, unlinkSync } from "fs"
 dotenv.config()
 
 class TelegramFilesService {
@@ -36,7 +36,8 @@ class TelegramFilesService {
                         throw new Error('Error fetching file link')
                     }
                 })
-                 pathToFile = await this.downloadFile(fileLink, resultFindeHash.fileHash)
+
+                pathToFile = await this.downloadFile(fileLink, resultFindeHash.fileHash, resultFindeHash.extension)
             }
             
             return pathToFile
@@ -46,30 +47,28 @@ class TelegramFilesService {
         }
     }
 
-    async saveFile(fileType: "video" | "img", file_id: string, session: HandlerSessionI) {
+    async saveFile(fileType: "video" | "img", file_id: string, extension: string, session: HandlerSessionI) {
         const fileHash = v4()
         await pool.execute(`
-            insert into telegramFiles (telegramFileId,userId,fileHash,sessionHash,format) 
-            values (?,?,?,?,?)
-            `, [file_id, session.user.id, fileHash, session.hash, fileType])
+            insert into telegramFiles (telegramFileId,userId,fileHash,sessionHash,format, extension) 
+            values (?,?,?,?,?,?)
+            `, [file_id, session.user.id, fileHash, session.hash, fileType, extension])
 
         if(fileType === "video") session.session.content.videos.push(fileHash) 
         else session.session.content.images.push(fileHash)   
-        
+        console.log(fileHash)
         await sessionService.updateSession(session) 
         return
     }
 
-    private async downloadFile(url: string, hashFile: string): Promise<string> {
+    private async downloadFile(url: string, hashFile: string, extension: string ): Promise<string> {
         try {
-            const ext = url.split(".")[url.split(".").length - 1]
-            const outputPath = otherService.getPathToStorage() + `/${hashFile}.${ext}`
+            const outputPath = otherService.getPathToStorage() + `/${hashFile}.${extension}`
             const response = await axios({
                 method: 'get',
                 url: url,
                 responseType: 'stream' 
-            });
-    
+            })
             const writer = createWriteStream(outputPath)
     
             response.data.pipe(writer)
@@ -85,6 +84,7 @@ class TelegramFilesService {
                 })
             })
         } catch (e) {
+            console.log(e)
             throw e
         }
     } 

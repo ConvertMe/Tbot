@@ -5,6 +5,7 @@ import { TelegramBot } from './modules/telegram/telegram'
 import otherService from './modules/other/other.service'
 import { join } from 'path'
 import ScheduleService from './modules/schedule/schedule.service'
+import { pool } from './modules/db/db'
 
 dotenv.config()
 const PORT = process.env.PORT || 5000
@@ -16,12 +17,9 @@ app.use("*", (req: Request, res: Response, next: NextFunction) => res.sendFile(j
 const start = async () => {
     try {
 /*         console.log(await pool.execute(`
-CREATE TABLE garbageСollectorFiles (
-  id int NOT NULL AUTO_INCREMENT,
-  pathToFile varchar(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id)
-);`)) */
+CREATE INDEX idx_fileHash ON telegramFiles (fileHash);
+ `
+)) */
         otherService.createFilesSystemFiles()
         app.listen(PORT, () => console.log('Server started on port: ' + PORT))
         new ScheduleService()
